@@ -67,7 +67,7 @@ class LSTM(object):
 
         _, c = sess.run([self.update_op, self.mse], feed_dict=feed_dict)
 
-      print("epoch {}, MSE: {}".format(e, c))
+      print("epoch %d, MSE: %.4f" % (e, c))
 
   def test(self, sess, data):
     accuracy = 0.0
@@ -88,8 +88,10 @@ class LSTM(object):
       p, hs, cs = sess.run([self.predictions, self.output_hidden_state, self.output_cell_state],
                             feed_dict=feed_dict)
 
-      accuracy += np.sum(np.equal(targets, p), axis=None)
+      accuracy += np.sum(np.equal(targets, p) * target_masks, axis=None)
       baseline += np.sum(targets)
       num_predictions += np.sum(target_masks)
 
-    print("Accuracy: {}, Baseline: {}".format(accuracy/num_predictions, baseline/num_predictions))
+    baseline_score = max(baseline/num_predictions, 1.0 - baseline/num_predictions)
+    print("Accuracy: %.4f, Baseline: %.4f" % (accuracy/num_predictions, baseline_score))
+    return accuracy/num_predictions, baseline_score
