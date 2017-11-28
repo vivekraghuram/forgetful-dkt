@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+from sklearn import metrics
 
 class LSTM(object):
 
@@ -35,7 +36,7 @@ class LSTM(object):
                                             self.sy_cell_states[i]
                                           ) for i in range(self.num_layers)])
 
-    cell = tf.contrib.rnn.LSTMBlockCell(self.hidden_dim, forget_bias=0.0)
+    cell = tf.contrib.rnn.LSTMBlockCell(self.hidden_dim)
     cell = tf.contrib.rnn.MultiRNNCell([cell for _ in range(self.num_layers)], state_is_tuple=True)
 
     self.output_hidden_state, self.output_cell_state = tf.nn.dynamic_rnn(cell, self.sy_input, initial_state=initial_state)
@@ -48,15 +49,14 @@ class LSTM(object):
     self.predictions = tf.round(logits)
 
 
-  def train(self, sess, data, epochs=10):
+  def train(self, sess, data, epochs=10, encode=lambda x,y: y):
     # Assumes data is an object where training_batches is an iterator over all the data and it yields
     # a tuple consisting of inputs, target and target masks
     for e in range(epochs):
-      data.shuffle()
       for batch in data.training_batches(self.batch_size):
         inputs, targets, target_masks = batch
         feed_dict = {
-          self.sy_input       : inputs,
+          self.sy_input       : encode(sess, inputs),
           self.sy_target      : targets,
           self.sy_target_mask : target_masks
         }
@@ -69,14 +69,17 @@ class LSTM(object):
 
       print("epoch %d, MSE: %.4f" % (e, c))
 
-  def test(self, sess, data):
+  def test(self, sess, data, encode=lambda x,y: y):
     accuracy = 0.0
     baseline = 0.0
     num_predictions = 0
+    all_predictions = []
+    all_targets = []
+
     for batch in data.testing_batches(self.batch_size):
       inputs, targets, target_masks = batch
       feed_dict = {
-        self.sy_input       : inputs,
+        self.sy_input       : encode(sess, inputs),
         self.sy_target      : targets,
         self.sy_target_mask : target_masks
       }
@@ -88,10 +91,14 @@ class LSTM(object):
       p, hs, cs = sess.run([self.predictions, self.output_hidden_state, self.output_cell_state],
                             feed_dict=feed_dict)
 
-      accuracy += np.sum(np.equal(targets, p) * target_masks, axis=None)
+      accuracy += np.sum(np.equal(targets, p) * (target_masks != 0), axis=None)
       baseline += np.sum(targets)
-      num_predictions += np.sum(target_masks)
+      num_predictions += np.sum(target_masks != 0)
+      all_predictions.extend(np.sum(p * (target_masks != 0), axis=1))
+      all_targets.extend(np.sum(targets, axis=1))
 
+    fpr, tpr, thresholds = metrics.roc_curve(all_targets, all_predictions, pos_label=2)
+    auc = metrics.auc(fpr, tpr)
     baseline_score = max(baseline/num_predictions, 1.0 - baseline/num_predictions)
-    print("Accuracy: %.4f, Baseline: %.4f" % (accuracy/num_predictions, baseline_score))
+    print("Accuracy: %.4f, Baseline: %.4f, AUC: %.5f" % (accuracy/num_predictions, baseline_score, auc))
     return accuracy/num_predictions, baseline_score
