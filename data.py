@@ -72,7 +72,9 @@ class SyntheticData(Data):
   def shuffle(self):
     indices = np.arange(self.training_cutoff)
     np.random.shuffle(indices)
-    self.data[0:self.training_cutoff] = self.data[indices]
+    self.inputs[0:self.training_cutoff] = self.inputs[indices]
+    self.targets[0:self.training_cutoff] = self.targets[indices]
+    self.target_masks[0:self.training_cutoff] = self.target_masks[indices]
 
 class SingleExerciseData(SyntheticData):
 
@@ -88,5 +90,37 @@ class SingleExerciseData(SyntheticData):
 
     self.inputs = self.data[:, :-1]
     self.targets = self.data[:, 1:, 0:1] # we only need to predict correctness
+
+    self.training_cutoff = int(0.8 * self.num_students)
+
+class LoadedExerciseData(SyntheticData):
+
+  def __init__(self, seq_path, mask_path, corrects_path):
+    self.seq_path = seq_path
+    self.mask_path = mask_path
+    self.corrects_path = corrects_path
+    self.data = np.load(self.seq_path)
+    self.target_masks = np.load(self.mask_path)[:, 1:]
+    self.targetss = np.load(self.mask_path)[:, 1:]
+
+    self.num_students  = self.data.shape[0]
+    self.num_questions = self.data.shape[1]
+
+    self.inputs = self.data[:, :-1]
+
+    self.training_cutoff = int(0.8 * self.num_students)
+
+
+class InMemoryExerciseData(SyntheticData):
+
+  def __init__(self, sequences, mask, corrects):
+    self.data = sequences
+    self.target_masks = mask[:, 1:]
+    self.targets = corrects[:, 1:]
+
+    self.num_students  = self.data.shape[0]
+    self.num_questions = self.data.shape[1]
+
+    self.inputs = self.data[:, :-1]
 
     self.training_cutoff = int(0.8 * self.num_students)
