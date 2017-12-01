@@ -36,7 +36,7 @@ class LSTM(object):
                                             self.sy_cell_states[i]
                                           ) for i in range(self.num_layers)])
 
-    cell = tf.contrib.rnn.LSTMBlockCell(self.hidden_dim)
+    cell = tf.contrib.rnn.LSTMCell(self.hidden_dim)
     cell = tf.contrib.rnn.MultiRNNCell([cell for _ in range(self.num_layers)], state_is_tuple=True)
 
     self.output_hidden_state, self.output_cell_state = tf.nn.dynamic_rnn(cell, self.sy_input, initial_state=initial_state)
@@ -94,11 +94,10 @@ class LSTM(object):
       accuracy += np.sum(np.equal(targets, p) * (target_masks != 0), axis=None)
       baseline += np.sum(targets)
       num_predictions += np.sum(target_masks != 0)
-      all_predictions.extend(np.sum(p * (target_masks != 0), axis=1))
-      all_targets.extend(np.sum(targets, axis=1))
+      all_predictions.extend(np.sum(p * (target_masks != 0), axis=2).reshape((p.shape[0] * p.shape[1])))
+      all_targets.extend(np.sum(targets, axis=2).reshape(targets.shape[0] * targets.shape[1]))
 
-    fpr, tpr, thresholds = metrics.roc_curve(all_targets, all_predictions, pos_label=2)
-    auc = metrics.auc(fpr, tpr)
+    auc = metrics.roc_auc_score(all_targets, all_predictions)
     baseline_score = max(baseline/num_predictions, 1.0 - baseline/num_predictions)
     print("Accuracy: %.4f, Baseline: %.4f, AUC: %.5f" % (accuracy/num_predictions, baseline_score, auc))
     return accuracy/num_predictions, baseline_score

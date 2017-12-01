@@ -67,7 +67,7 @@ class DataProcessor(object):
     df = pd.read_csv(exercise_file, header = None, names = self.names.iloc[0],
                      usecols = ['f0_', 'time_done', 'exercise', 'correct'])
     df['uid'] = pd.to_numeric(df['f0_'].str.split('-').str[1], errors='coerce')
-    df['date'] = pd.to_datetime(df['time_done'])
+    df['date'] = pd.to_datetime(df['time_done']).astype(np.int64) // 10**9 # get unix time
     df.drop(['f0_', 'time_done'], axis=1, inplace=True)
     return exercise_df.append(df)
 
@@ -82,8 +82,8 @@ class DataProcessor(object):
       self.data_key = 'correctness_only'
       return self
 
-    corrects = np.zeros((len(self.filtered_uids), self._max_seq_length, 1))
-    mask = np.zeros((len(self.filtered_uids), self._max_seq_length, 1))
+    corrects = np.zeros((len(self.filtered_uids), self._max_seq_length, len(self.exercise_names)))
+    mask = np.zeros((len(self.filtered_uids), self._max_seq_length, len(self.exercise_names)))
     sequences = np.zeros((len(self.filtered_uids),
                           self._max_seq_length,
                           2 * len(self.exercise_names)))
@@ -101,8 +101,8 @@ class DataProcessor(object):
           sequences[row_idx, col_idx, idx] = 1
           sequences[row_idx, col_idx, idx + 1] = event_dict['correct']
 
-          corrects[row_idx, col_idx, 0] = event_dict['correct']
-          mask[row_idx, col_idx, 0] = 1
+          corrects[row_idx, col_idx, idx // 2] = event_dict['correct']
+          mask[row_idx, col_idx, idx // 2] = 1
           col_idx += 1
 
       if verbose and row_idx % 100 == 0:
@@ -132,8 +132,8 @@ class DataProcessor(object):
       self.data_key = 'continuous_delay_by_exercise'
       return self
 
-    corrects = np.zeros((len(self.filtered_uids), self._max_seq_length, 1))
-    mask = np.zeros((len(self.filtered_uids), self._max_seq_length, 1))
+    corrects = np.zeros((len(self.filtered_uids), self._max_seq_length, len(self.exercise_names)))
+    mask = np.zeros((len(self.filtered_uids), self._max_seq_length, len(self.exercise_names)))
     sequences = np.zeros((len(self.filtered_uids),
                           self._max_seq_length,
                           4 * len(self.exercise_names)))
@@ -164,8 +164,8 @@ class DataProcessor(object):
           sequences[row_idx, col_idx, idx + 2] = (event_dict['date'] - prev_evdicts[idx]['date']).total_seconds() / 60
 
         prev_evdicts[idx] = event_dict
-        corrects[row_idx, col_idx, 0] = event_dict['correct']
-        mask[row_idx, col_idx, 0] = 1
+        corrects[row_idx, col_idx, idx // 4] = event_dict['correct']
+        mask[row_idx, col_idx, idx // 4] = 1
         col_idx += 1
 
       row_idx += 1
@@ -190,8 +190,8 @@ class DataProcessor(object):
       self.data_key = 'continuous_delay_aggregate'
       return self
 
-    corrects = np.zeros((len(self.filtered_uids), self._max_seq_length, 1))
-    mask = np.zeros((len(self.filtered_uids), self._max_seq_length, 1))
+    corrects = np.zeros((len(self.filtered_uids), self._max_seq_length, len(self.exercise_names)))
+    mask = np.zeros((len(self.filtered_uids), self._max_seq_length, len(self.exercise_names)))
     sequences = np.zeros((len(self.filtered_uids),
                           self._max_seq_length,
                           4 * len(self.exercise_names)))
@@ -215,14 +215,14 @@ class DataProcessor(object):
             if i % 4 == 3:
               sequences[row_idx, col_idx, i] = 1
         else:
-          time_difference = (event_dict['date'] - prev_event_dict['date']).total_seconds() / 60
+          time_difference = (event_dict['date'] - prev_event_dict['date']) / 60
           for i in range(4 * len(self.exercise_names)):
             if i % 4 == 2:
               sequences[row_idx, col_idx, i] = time_difference
 
         prev_event_dict = event_dict
-        corrects[row_idx, col_idx, 0] = event_dict['correct']
-        mask[row_idx, col_idx, 0] = 1
+        corrects[row_idx, col_idx, idx // 4] = event_dict['correct']
+        mask[row_idx, col_idx, idx // 4] = 1
         col_idx += 1
 
       row_idx += 1
@@ -257,8 +257,8 @@ class DataProcessor(object):
       return self
 
     num_buckets = 1 + len(buckets)
-    corrects = np.zeros((len(self.filtered_uids), self._max_seq_length, 1))
-    mask = np.zeros((len(self.filtered_uids), self._max_seq_length, 1))
+    corrects = np.zeros((len(self.filtered_uids), self._max_seq_length, len(self.exercise_names)))
+    mask = np.zeros((len(self.filtered_uids), self._max_seq_length, len(self.exercise_names)))
     sequences = np.zeros((len(self.filtered_uids),
                           self._max_seq_length,
                           3 * len(self.exercise_names) * num_buckets))
@@ -294,8 +294,8 @@ class DataProcessor(object):
             immediate_only = False
 
         prev_evdicts[exercise_idx] = event_dict
-        corrects[row_idx, col_idx, 0] = event_dict['correct']
-        mask[row_idx, col_idx, 0] = 1
+        corrects[row_idx, col_idx, exercise_idx] = event_dict['correct']
+        mask[row_idx, col_idx, exercise_idx] = 1
         col_idx += 1
 
       if not immediate_only:
@@ -337,8 +337,8 @@ class DataProcessor(object):
       return self
 
     num_buckets = 1 + len(buckets)
-    corrects = np.zeros((len(self.filtered_uids), self._max_seq_length, 1))
-    mask = np.zeros((len(self.filtered_uids), self._max_seq_length, 1))
+    corrects = np.zeros((len(self.filtered_uids), self._max_seq_length, len(self.exercise_names)))
+    mask = np.zeros((len(self.filtered_uids), self._max_seq_length, len(self.exercise_names)))
     sequences = np.zeros((len(self.filtered_uids),
                           self._max_seq_length,
                           3 * len(self.exercise_names) * num_buckets))
@@ -370,8 +370,8 @@ class DataProcessor(object):
             immediate_only = False
 
         prev_event_dict = event_dict
-        corrects[row_idx, col_idx, 0] = event_dict['correct']
-        mask[row_idx, col_idx, 0] = 1
+        corrects[row_idx, col_idx, exercise_idx] = event_dict['correct']
+        mask[row_idx, col_idx, exercise_idx] = 1
         col_idx += 1
 
       if not immediate_only:
@@ -395,7 +395,7 @@ class DataProcessor(object):
     if prev_event_dict is None:
       return 0
 
-    time_difference_hrs = (event_dict['date'] - prev_event_dict['date']).total_seconds() / 3600
+    time_difference_hrs = (event_dict['date'] - prev_event_dict['date']) / 3600
     for idx, bucket in enumerate(buckets):
       if bucket == None:
         return idx + 1
