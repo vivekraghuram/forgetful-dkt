@@ -36,17 +36,17 @@ class LSTM(object):
                                             self.sy_cell_states[i]
                                           ) for i in range(self.num_layers)])
 
-    cell = tf.contrib.rnn.LSTMCell(self.hidden_dim)
-    cell = tf.contrib.rnn.MultiRNNCell([cell for _ in range(self.num_layers)], state_is_tuple=True)
+    cell = tf.contrib.rnn.MultiRNNCell([tf.contrib.rnn.LSTMCell(self.hidden_dim) for _ in range(self.num_layers)],
+                                       state_is_tuple=True)
 
     self.output_hidden_state, self.output_cell_state = tf.nn.dynamic_rnn(cell, self.sy_input, initial_state=initial_state)
 
-    logits = tf.layers.dense(inputs=self.output_hidden_state, units=self.output_dim, activation=activation)
+    self.logits = tf.layers.dense(inputs=self.output_hidden_state, units=self.output_dim, activation=activation)
 
     # Apply target mask as weights to zero out meaningless values
-    self.mse = tf.losses.mean_squared_error(self.sy_target, logits, weights=self.sy_target_mask)
+    self.mse = tf.losses.mean_squared_error(self.sy_target, self.logits, weights=self.sy_target_mask)
     self.update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.mse)
-    self.predictions = tf.round(logits)
+    self.predictions = tf.round(self.logits)
 
 
   def train(self, sess, data, epochs=10, encode=lambda x,y: y):
@@ -72,6 +72,7 @@ class LSTM(object):
   def test(self, sess, data, encode=lambda x,y: y):
     accuracy = 0.0
     baseline = 0.0
+    mae = 0.0
     num_predictions = 0
     all_predictions = []
     all_targets = []
@@ -88,16 +89,16 @@ class LSTM(object):
         feed_dict[self.sy_hidden_states[i]] = np.zeros((self.batch_size, self.hidden_dim))
         feed_dict[self.sy_cell_states[i]] = np.zeros((self.batch_size, self.hidden_dim))
 
-      p, hs, cs = sess.run([self.predictions, self.output_hidden_state, self.output_cell_state],
-                            feed_dict=feed_dict)
+      p, l = sess.run([self.predictions, self.logits], feed_dict=feed_dict)
 
       accuracy += np.sum(np.equal(targets, p) * (target_masks != 0), axis=None)
       baseline += np.sum(targets)
+      mae += np.sum(np.absolute(targets - l) * (target_masks != 0), axis=None)
       num_predictions += np.sum(target_masks != 0)
       all_predictions.extend(np.sum(p * (target_masks != 0), axis=2).reshape((p.shape[0] * p.shape[1])))
       all_targets.extend(np.sum(targets, axis=2).reshape(targets.shape[0] * targets.shape[1]))
 
     auc = metrics.roc_auc_score(all_targets, all_predictions)
     baseline_score = max(baseline/num_predictions, 1.0 - baseline/num_predictions)
-    print("Accuracy: %.4f, Baseline: %.4f, AUC: %.5f" % (accuracy/num_predictions, baseline_score, auc))
-    return accuracy/num_predictions, baseline_score
+    print("Accuracy: %.5f, Baseline: %.5f, AUC: %.5f, MAE: %.5f" % (accuracy/num_predictions, baseline_score, auc, mae/num_predictions))
+    return accuracy/num_predictions, baseline_score, auc, mae/num_predictions
