@@ -67,7 +67,7 @@ class LSTM(object):
 
         _, c = sess.run([self.update_op, self.mse], feed_dict=feed_dict)
 
-      print("epoch %d, MSE: %.4f" % (e, c))
+      # print("epoch %d, MSE: %.4f" % (e, c))
 
   def test(self, sess, data, encode=lambda x,y: y):
     accuracy = 0.0
@@ -95,9 +95,16 @@ class LSTM(object):
       baseline += np.sum(targets)
       mae += np.sum(np.absolute(targets - l) * (target_masks != 0), axis=None)
       num_predictions += np.sum(target_masks != 0)
-      all_predictions.extend(np.sum(p * (target_masks != 0), axis=2).reshape((p.shape[0] * p.shape[1])))
-      all_targets.extend(np.sum(targets, axis=2).reshape(targets.shape[0] * targets.shape[1]))
 
+      summed_predictions = np.sum(p, axis=2)
+      summed_targets = np.sum(targets, axis=2)
+      summed_masks = np.sum(target_masks != 0, axis=2)
+      for idx in range(len(summed_predictions)):
+        all_predictions.extend(summed_predictions[idx, 0:int(np.sum(summed_masks[idx]))])
+        all_targets.extend(summed_targets[idx, 0:int(np.sum(summed_masks[idx]))])
+
+    assert(len(all_predictions) == num_predictions)
+    assert(len(all_targets) == num_predictions)
     auc = metrics.roc_auc_score(all_targets, all_predictions)
     baseline_score = max(baseline/num_predictions, 1.0 - baseline/num_predictions)
     print("Accuracy: %.5f, Baseline: %.5f, AUC: %.5f, MAE: %.5f" % (accuracy/num_predictions, baseline_score, auc, mae/num_predictions))
