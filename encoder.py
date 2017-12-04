@@ -41,16 +41,18 @@ class Encoder(object):
       self.mse = tf.losses.mean_squared_error(self.sy_target, self.decoded_out)
       self.update_op = tf.train.AdamOptimizer(learning_rate).minimize(self.mse)
 
-  def train(self, sess, data, epochs=1):
+  def train(self, sess, data, epochs=1, num_sequences_per_iter=None):
+    if num_sequences_per_iter is None:
+      num_sequences_per_iter = self.batch_size
     for e in range(epochs):
       data.shuffle()
       cost = []
-      for i, (inputs, targets, target_masks) in enumerate(data.training_batches(data.training_cutoff - 1)):
-        assert(i == 0) # This should only ever do one loop
+      for i, (inputs, targets, target_masks) in enumerate(data.training_batches(num_sequences_per_iter)):
         vectorized_inputs = inputs.reshape((inputs.shape[0] * inputs.shape[1], inputs.shape[2]))
         vectorized_inputs = vectorized_inputs[np.sum(vectorized_inputs, axis=1) != 0]
 
         start_idx, end_idx = 0, self.batch_size
+        iter_costs = []
         while end_idx < vectorized_inputs.shape[0]:
 
           feed_dict = {
@@ -61,6 +63,9 @@ class Encoder(object):
           _, c = sess.run([self.update_op, self.mse], feed_dict=feed_dict)
           start_idx, end_idx = end_idx, end_idx + self.batch_size
           cost.append(c)
+          iter_costs.append(c)
+
+        print("Iteration %d, MSE: %.4f" % (i, np.mean(iter_costs)))
 
       print("epoch %d, MSE: %.4f" % (e, np.mean(cost)))
 

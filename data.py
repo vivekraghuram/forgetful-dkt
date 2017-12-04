@@ -50,9 +50,9 @@ class SyntheticData(Data):
   def k_fold(self, k):
     self.training_cutoff = int((k - 1.0) / k * self.num_students)
     for i in range(k):
-      np.roll(self.inputs, self.num_students - self.training_cutoff, axis=0)
-      np.roll(self.targets, self.num_students - self.training_cutoff, axis=0)
-      np.roll(self.target_masks, self.num_students - self.training_cutoff, axis=0)
+      self.inputs = np.roll(self.inputs, self.num_students - self.training_cutoff, axis=0)
+      self.targets = np.roll(self.targets, self.num_students - self.training_cutoff, axis=0)
+      self.target_masks = np.roll(self.target_masks, self.num_students - self.training_cutoff, axis=0)
       yield i + 1
 
   def training_batches(self, batch_size):
